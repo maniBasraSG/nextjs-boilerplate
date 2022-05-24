@@ -1,0 +1,38 @@
+version: 0.2
+env:
+  parameter-store:
+    DOCKERHUB_PASSWORD: /common/DOCKERHUB_PASSWORD
+    DOCKERHUB_USERNAME: /common/DOCKERHUB_USERNAME
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - REPOSITORY_URI=245245884252.dkr.ecr.eu-west-1.amazonaws.com/pl-fe
+      - echo Logging in to Docker Hub...
+      - echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Mving env creating file
+      - echo $CUSTOM_ENV
+      - echo $CUSTOM_ENV-env
+      - cp $CUSTOM_ENV-env .env
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file...
+      #- printf '[{"name":"pl-fe-dev","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > feImageDefinitions.json
+      - printf '[{"name":"pl-fe-%s","imageUri":"%s"}]' $CUSTOM_ENV $REPOSITORY_URI:$IMAGE_TAG > feImageDefinitions.json
+artifacts:
+  files:
+    - feImageDefinitions.json
